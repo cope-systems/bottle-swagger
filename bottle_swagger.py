@@ -1,11 +1,17 @@
 import re
-from bottle import request, response, HTTPResponse, json_dumps
+from bottle import request, response, HTTPResponse, json_dumps, static_file
 from bravado_core.exception import MatchingResponseNotFound
 from bravado_core.request import IncomingRequest, unmarshal_request
 from bravado_core.response import OutgoingResponse, validate_response, get_response_spec
 from bravado_core.spec import Spec
 from jsonschema import ValidationError
 from six.moves.urllib.parse import urljoin, urlparse
+
+try:
+    from bottle_swagger_ui import SWAGGER_UI_DIR, render_index_html
+    SWAGGER_UI_IMPORT_SUCCESS = True
+except ImportError:
+    SWAGGER_UI_IMPORT_SUCCESS = False
 
 
 def _error_response(status, e):
@@ -27,6 +33,7 @@ def default_not_found_handler(e):
 
 class SwaggerPlugin(object):
     DEFAULT_SWAGGER_SCHEMA_SUBURL = '/swagger.json'
+    DEFAULT_SWAGGER_UI_SUBURL = '/ui/'
 
     name = 'swagger'
     api = 2
@@ -46,9 +53,11 @@ class SwaggerPlugin(object):
                  invalid_response_handler=default_server_error_handler,
                  swagger_op_not_found_handler=default_not_found_handler,
                  exception_handler=default_server_error_handler,
-                 serve_swagger_schema=True,
                  swagger_base_path=None,
+                 serve_swagger_schema=True,
                  swagger_schema_suburl=DEFAULT_SWAGGER_SCHEMA_SUBURL,
+                 serve_swagger_ui=False,
+                 swagger_ui_suburl=DEFAULT_SWAGGER_UI_SUBURL,
                  extra_bravado_config=None):
         """
         Add Swagger validation to your Bottle application.
@@ -87,12 +96,16 @@ class SwaggerPlugin(object):
         :type swagger_op_not_found_handler: str -> HTTP Response
         :param exception_handler: This handler is triggered if the request callback threw an exception.
         :type exception_handler: str -> HTTP Response.
-        :param serve_swagger_schema: Should we serve the Swagger schema?
-        :type serve_swagger_schema: bool
         :param swagger_base_path: Override the base path for the API specified in the swagger spec/
         :type swagger_base_path: str
+        :param serve_swagger_schema: Should we serve the Swagger schema?
+        :type serve_swagger_schema: bool
         :param swagger_schema_suburl: The subpath in the API to serve the swagger schema.
         :type swagger_schema_suburl: str
+        :param serve_swagger_ui: Should we also serve a copy of Swagger UI?
+        :type serve_swagger_ui: bool
+        :param swagger_ui_suburl: The subpath from the API to serve the integrate Swagger UI up at.
+        :type swagger_ui_suburl: str
         :param extra_bravado_config: Any additional Bravado configuration items you may want.
         :type extra_bravado_config: object
         """
@@ -107,9 +120,14 @@ class SwaggerPlugin(object):
         self.invalid_response_handler = invalid_response_handler
         self.swagger_op_not_found_handler = swagger_op_not_found_handler
         self.exception_handler = exception_handler
-        self.serve_swagger_schema = serve_swagger_schema
+        self.serve_swagger_schema = serve_swagger_schema or self.serve_swagger_ui
+        self.serve_swagger_ui = serve_swagger_ui
+
+        if self.serve_swagger_ui and not SWAGGER_UI_IMPORT_SUCCESS:
+            raise ImportError("Unable to load built-in Swagger UI!")
 
         self.swagger_schema_suburl = swagger_schema_suburl
+        self.swagger_ui_suburl = swagger_ui_suburl
         self.bravado_config = extra_bravado_config or {}
         self.bravado_config.update({
             'validate_swagger_spec': validate_swagger_spec,
@@ -132,10 +150,22 @@ class SwaggerPlugin(object):
         return wrapper
 
     def setup(self, app):
+        swagger_schema_url = urljoin(self.swagger_base_path, self.swagger_schema_suburl)
+        swagger_ui_base_url = urljoin(self.swagger_base_path, self.swagger_ui_suburl)
+
         if self.serve_swagger_schema:
-            @app.get(urljoin(self.swagger_base_path, self.swagger_schema_suburl))
+            @app.get(swagger_schema_url)
             def swagger_schema():
                 return self.swagger.spec_dict
+
+        if self.serve_swagger_ui:
+            @app.get(swagger_ui_base_url)
+            def swagger_ui_index():
+                return render_index_html(app.get_url(swagger_schema_url))
+
+            @app.get(urljoin(swagger_ui_base_url, "<path:path>"))
+            def swagger_ui_assets(path):
+                return static_file(path, SWAGGER_UI_DIR)
 
     def _swagger_validate(self, callback, route, *args, **kwargs):
         swagger_op = self._swagger_op(route)
@@ -144,7 +174,11 @@ class SwaggerPlugin(object):
 
             if not route.rule.startswith(self.swagger_base_path) or self.ignore_undefined_routes:
                 return callback(*args, **kwargs)
-            elif self.serve_swagger_schema and route.rule == urljoin(self.swagger_base_path, self.swagger_schema_suburl):
+            elif self.serve_swagger_schema \
+                    and route.rule == urljoin(self.swagger_base_path, self.swagger_schema_suburl):
+                return callback(*args, **kwargs)
+            elif self.serve_swagger_ui \
+                    and route.rule.startswith(urljoin(self.swagger_base_path, self.swagger_ui_suburl)):
                 return callback(*args, **kwargs)
             else:
                 return self.swagger_op_not_found_handler(route)
