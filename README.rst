@@ -50,6 +50,7 @@ Where "_load_swagger_def" returns a dict representing your swagger specification
 (loaded from a yaml file, for example).
 
 There are a number of arguments that you can pass to the plugin constructor:
+
 * ``validate_swagger_spec`` - Boolean (default ``True``) indicating if the plugin should actually validate the Swagger spec.
 
 * ``validate_requests`` - Boolean (default ``True``) indicating if incoming requests should be validated or not.
