@@ -218,7 +218,10 @@ class TestBottleSwagger(TestCase):
         self.assertEqual(response.status_int, 200)
 
     def test_formdata_parameters(self):
-        response = self._test_request(url="/thing_formdata", route_url="/thing_formdata", method='POST', request_json='thing_id=123', content_type='multipart/form-data')
+        response = self._test_request(
+            url="/thing_formdata", route_url="/thing_formdata", method='POST',
+            request_json='thing_id=123', content_type='multipart/form-data'
+        )
         self.assertEqual(response.status_int, 200)
 
     def test_get_swagger_schema(self):
@@ -227,6 +230,15 @@ class TestBottleSwagger(TestCase):
         test_app = TestApp(bottle_app)
         response = test_app.get(SwaggerPlugin.DEFAULT_SWAGGER_SCHEMA_SUBURL)
         self.assertEqual(response.json, self.SWAGGER_DEF)
+
+    def test_get_swagger_ui(self):
+        bottle_app = Bottle()
+        bottle_app.install(self._make_swagger_plugin(serve_swagger_ui=True))
+        test_app = TestApp(bottle_app)
+        response = test_app.get("/ui/")
+        self.assertEqual(response.status_int, 200)
+        for keyword in ["html", "swagger-ui", "/swagger.json"]:
+            assert keyword in response.text
 
     def _test_request(self, swagger_plugin=None, method='GET', url='/thing', route_url=None, request_json=VALID_JSON,
                       response_json=VALID_JSON, headers=None, content_type='application/json',
@@ -253,7 +265,9 @@ class TestBottleSwagger(TestCase):
             if content_type == 'application/json':
                 response = test_app.post_json(url, request_json, expect_errors=True, headers=headers)
             else:
-                response = test_app.post(url, request_json, content_type=content_type, expect_errors=True, headers=headers)
+                response = test_app.post(
+                    url, request_json, content_type=content_type, expect_errors=True, headers=headers
+                )
         else:
 
             raise Exception("Invalid method {}".format(method))

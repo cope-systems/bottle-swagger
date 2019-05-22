@@ -1,3 +1,6 @@
+__version__ = (2, 0, 0)
+
+import os
 import re
 from bottle import request, response, HTTPResponse, json_dumps, static_file
 from bravado_core.exception import MatchingResponseNotFound
@@ -6,9 +9,21 @@ from bravado_core.response import OutgoingResponse, validate_response, get_respo
 from bravado_core.spec import Spec
 from jsonschema import ValidationError
 from six.moves.urllib.parse import urljoin, urlparse
+from bottle import SimpleTemplate
+
+SWAGGER_UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'swagger-ui-3.22.2-dist')
+SWAGGER_UI_INDEX_TEMPLATE_PATH = os.path.join(SWAGGER_UI_DIR, 'index.html.st')
+
+with open(SWAGGER_UI_INDEX_TEMPLATE_PATH, 'r') as f:
+    SWAGGER_UI_INDEX_TEMPLATE = f.read()
+
+
+def render_index_html(swagger_spec_url):
+    return SimpleTemplate(SWAGGER_UI_INDEX_TEMPLATE).render(swagger_spec_url=swagger_spec_url)
+
 
 try:
-    from bottle_swagger_ui import SWAGGER_UI_DIR, render_index_html
+    from bottle_swagger import SWAGGER_UI_DIR, render_index_html
     SWAGGER_UI_IMPORT_SUCCESS = True
 except ImportError:
     SWAGGER_UI_IMPORT_SUCCESS = False
