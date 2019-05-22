@@ -1,10 +1,9 @@
 import re
-from bottle import request, response, HTTPResponse, json_loads, json_dumps
+from bottle import request, response, HTTPResponse, json_dumps
 from bravado_core.exception import MatchingResponseNotFound
 from bravado_core.request import IncomingRequest, unmarshal_request
 from bravado_core.response import OutgoingResponse, validate_response, get_response_spec
 from bravado_core.spec import Spec
-from bravado_core.model import Model
 from jsonschema import ValidationError
 from six.moves.urllib.parse import urljoin, urlparse
 
