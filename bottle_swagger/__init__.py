@@ -35,18 +35,106 @@ def _error_response(status, e):
 
 
 def default_server_error_handler(e):
+    """
+    The default error handler function when the request callback throws
+    and exception.
+
+    Returns a JSON payload of
+
+    {"code": 500, "message": str(e)}
+
+    And sets the status code to 500.
+
+    :param e: The exception that was thrown by the request handler.
+    :type e: BaseException
+    :return: The response payload.
+    :rtype: dict
+    """
     return _error_response(500, e)
 
 
 def default_bad_request_handler(e):
+    """
+    The default error handler function for request validation
+    failures.
+
+    Returns a JSON payload of
+
+    {"code": 400, "message": str(e)}
+
+    And sets the status code to 400.
+
+    :param e: The exception that was thrown Bravado Core upon request validation failure.
+    :type e: BaseException
+    :return: The response payload.
+    :rtype: dict
+    """
     return _error_response(400, e)
 
 
-def default_not_found_handler(e):
-    return _error_response(404, e)
+def default_not_found_handler(r):
+    """
+    The default error handler function for route not found failures.
+
+    Returns a JSON payload of
+
+    {"code": 404, "message": str(r)}
+
+    And sets the status code to 404.
+
+    :param r: The Bottle route that was triggered.
+    :type r: bottle.Route
+    :return: The response payload.
+    :rtype: dict
+    """
+    return _error_response(404, r)
 
 
 class SwaggerPlugin(object):
+    """
+    This plugin allows the user to use Swagger 2.0 and Bravado Core to write a REST API with validation
+    and automatic marshalling and unmarshalling.
+
+    This may be used in a Bottle application by installing it using the ``install`` method:
+
+        >>> from bottle import Bottle
+        >>> from bottle_swagger import SwaggerPlugin
+        >>> my_app = Bottle()
+        >>> my_swagger_def = load_my_swagger_def_from_somewhere()  # You implement this to return a Swagger spec dict.
+        >>> my_plugin = SwaggerPlugin(my_swagger_def, serve_swagger_ui=True)
+        >>> my_app.install(my_plugin)
+
+    Constructor Parameters:
+
+    * ``swagger_def`` -- (dict) The raw Swagger 2.0 specification, as a Python dictionary.
+    * ``validate_swagger_spec`` -- (bool) Should plugin validate the given Swagger specification?
+    * ``validate_requests`` -- (bool) Should the plugin validate incoming requests for defined Swagger routes?
+    * ``validate_responses`` -- (bool) Should the plugin validate outoging requests for defined Swagger routes?
+    * ``use_bravado_models`` -- (bool) Should the plugin use Bravado's models or raw dictionaries for the swagger_data
+        attached to the requests?
+    * ``user_defined_formats`` -- (bool) A list of any custom formats (as defined by Bravado-Core) for our Swagger Spec.
+    * ``include_missing_properties`` -- (bool) Should we include any missing properties as None?
+    * ``default_type_to_object`` -- (bool) If a type isn't given for a Swagger property should it default to "object"?
+    * ``internally_dereference_refs`` -- (bool) Should Bravado fully derefence $refs (for a performance speed up)?
+    * ``ignore_undefined_api_routes`` -- (bool) Should we ignore undefined API routes, and trigger the
+        swagger_op_not_found handler?
+    * ``auto_jsonify`` -- (bool) Should we automatically convert data returned from our callbacks to JSON? Bottle
+        normally will attempt to convert only objects, but we can do better.
+    * ``invalid_request_handler`` -- (Exception -> HTTP Response) This handler is triggered when the
+        request validation fails.
+    * ``invalid_response_handler`` -- (Exception -> HTTP Response) This handler is triggered when
+        the response validation fails.
+    * ``swagger_op_not_found_handler`` -- (bottle.Route -> HTTP Response) This handler is triggered if the
+        route isn't found for the API subpath, and ignore_missing_routes has been set True.
+    * ``exception_handler`` -- (Base Exception -> HTTP Response.) This handler is triggered if the
+        request callback threw an exception.
+    * ``swagger_base_path`` -- (str) Override the base path for the API specified in the swagger spec/
+    * ``serve_swagger_schema`` -- (bool) Should we serve the Swagger schema?
+    * ``swagger_schema_suburl`` -- (str) The subpath in the API to serve the swagger schema.
+    * ``serve_swagger_ui`` -- (bool) Should we also serve a copy of Swagger UI?
+    * ``swagger_ui_suburl`` -- (str) The subpath from the API to serve the integrate Swagger UI up at.
+    * ``extra_bravado_config`` -- (object) Any additional Bravado configuration items you may want.
+    """
     DEFAULT_SWAGGER_SCHEMA_SUBURL = '/swagger.json'
     DEFAULT_SWAGGER_UI_SUBURL = '/ui/'
 
@@ -80,7 +168,7 @@ class SwaggerPlugin(object):
         :param swagger_def: The raw Swagger 2.0 specification, as a Python dictionary.
         :type swagger_def: dict
         :param validate_swagger_spec: Should plugin validate the given Swagger specification?
-        :type: validate_swagger_spec: bool
+        :type validate_swagger_spec: bool
         :param validate_requests: Should the plugin validate incoming requests for defined Swagger routes?
         :type validate_requests: bool
         :param validate_responses: Should the plugin validate outoging requests for defined Swagger routes?
@@ -103,14 +191,14 @@ class SwaggerPlugin(object):
             normally will attempt to convert only objects, but we can do better.
         :type auto_jsonify: bool
         :param invalid_request_handler: This handler is triggered when the request validation fails.
-        :type invalid_request_handler: str -> HTTP Response
+        :type invalid_request_handler: BaseException -> HTTP Response
         :param invalid_response_handler: This handler is triggered when the response validation fails.
-        :type invalid_response_handler: str -> HTTP Response
+        :type invalid_response_handler: BaseException -> HTTP Response
         :param swagger_op_not_found_handler: This handler is triggered if the route isn't found for the API subpath,
            and ignore_missing_routes has been set True.
-        :type swagger_op_not_found_handler: str -> HTTP Response
+        :type swagger_op_not_found_handler: bottle.Route -> HTTP Response
         :param exception_handler: This handler is triggered if the request callback threw an exception.
-        :type exception_handler: str -> HTTP Response.
+        :type exception_handler: BaseException -> HTTP Response.
         :param swagger_base_path: Override the base path for the API specified in the swagger spec/
         :type swagger_base_path: str
         :param serve_swagger_schema: Should we serve the Swagger schema?
@@ -245,7 +333,11 @@ class SwaggerPlugin(object):
 
 
 class BottleIncomingRequest(IncomingRequest):
+    """
+    The Incoming Request wrapper fed into Bravado Core for validation.
 
+    Users should not need to consume this directly.
+    """
     def __init__(self, bottle_request):
         self.request = bottle_request
         self.path = bottle_request.url_args
@@ -267,7 +359,11 @@ class BottleIncomingRequest(IncomingRequest):
 
 
 class BottleOutgoingResponse(OutgoingResponse):
+    """
+    The Outgoing Response wrapper fed into Bravado Core.
 
+    Users should not need to consume this class directly.
+    """
     def __init__(self, bottle_response, response_json):
         self.response = bottle_response
         self.response_json = response_json
