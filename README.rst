@@ -2,6 +2,9 @@
 Bottle Swagger Plugin
 =====================
 
+.. image:: https://travis-ci.org/cope-systems/bottle-swagger.svg?branch=master
+    :target: https://travis-ci.org/cope-systems/bottle-swagger
+
 About
 -----
 This project is a Bottle plugin for working with Swagger.
