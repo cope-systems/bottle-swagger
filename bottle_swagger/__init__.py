@@ -18,15 +18,11 @@ with open(SWAGGER_UI_INDEX_TEMPLATE_PATH, 'r') as f:
     SWAGGER_UI_INDEX_TEMPLATE = f.read()
 
 
-def render_index_html(swagger_spec_url):
-    return SimpleTemplate(SWAGGER_UI_INDEX_TEMPLATE).render(swagger_spec_url=swagger_spec_url)
-
-
-try:
-    from bottle_swagger import SWAGGER_UI_DIR, render_index_html
-    SWAGGER_UI_IMPORT_SUCCESS = True
-except ImportError:
-    SWAGGER_UI_IMPORT_SUCCESS = False
+def render_index_html(swagger_spec_url, validator_url=None):
+    return SimpleTemplate(SWAGGER_UI_INDEX_TEMPLATE).render(
+        swagger_spec_url=swagger_spec_url,
+        validator_url=json_dumps(validator_url)
+    )
 
 
 def _error_response(status, e):
@@ -133,6 +129,7 @@ class SwaggerPlugin(object):
     * ``swagger_schema_suburl`` -- (str) The subpath in the API to serve the swagger schema.
     * ``serve_swagger_ui`` -- (bool) Should we also serve a copy of Swagger UI?
     * ``swagger_ui_suburl`` -- (str) The subpath from the API to serve the integrate Swagger UI up at.
+    * ``swagger_ui_validator_url`` -- (str) The URL for a Swagger spec validator. By default this is None (i.e. off).
     * ``extra_bravado_config`` -- (object) Any additional Bravado configuration items you may want.
     """
     DEFAULT_SWAGGER_SCHEMA_SUBURL = '/swagger.json'
@@ -161,6 +158,7 @@ class SwaggerPlugin(object):
                  swagger_schema_suburl=DEFAULT_SWAGGER_SCHEMA_SUBURL,
                  serve_swagger_ui=False,
                  swagger_ui_suburl=DEFAULT_SWAGGER_UI_SUBURL,
+                 swagger_ui_validator_url=None,
                  extra_bravado_config=None):
         """
         Add Swagger validation to your Bottle application.
@@ -209,6 +207,8 @@ class SwaggerPlugin(object):
         :type serve_swagger_ui: bool
         :param swagger_ui_suburl: The subpath from the API to serve the integrate Swagger UI up at.
         :type swagger_ui_suburl: str
+        :param swagger_ui_validator_url: The URL for a Swagger validator instance. If None, validation in the UI is off.
+        :type swagger_ui_validator_url: str | NoneType
         :param extra_bravado_config: Any additional Bravado configuration items you may want.
         :type extra_bravado_config: object
         """
@@ -225,9 +225,6 @@ class SwaggerPlugin(object):
         self.exception_handler = exception_handler
         self.serve_swagger_schema = serve_swagger_schema or self.serve_swagger_ui
         self.serve_swagger_ui = serve_swagger_ui
-
-        if self.serve_swagger_ui and not SWAGGER_UI_IMPORT_SUCCESS:
-            raise ImportError("Unable to load built-in Swagger UI!")
 
         self.swagger_schema_suburl = swagger_schema_suburl
         self.swagger_ui_suburl = swagger_ui_suburl
