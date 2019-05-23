@@ -225,6 +225,7 @@ class SwaggerPlugin(object):
         self.exception_handler = exception_handler
         self.serve_swagger_schema = serve_swagger_schema or self.serve_swagger_ui
         self.serve_swagger_ui = serve_swagger_ui
+        self.swagger_ui_validator_url = swagger_ui_validator_url
 
         self.swagger_schema_suburl = swagger_schema_suburl
         self.swagger_ui_suburl = swagger_ui_suburl
@@ -261,7 +262,7 @@ class SwaggerPlugin(object):
         if self.serve_swagger_ui:
             @app.get(swagger_ui_base_url)
             def swagger_ui_index():
-                return render_index_html(app.get_url(swagger_schema_url))
+                return render_index_html(app.get_url(swagger_schema_url), validator_url=self.swagger_ui_validator_url)
 
             @app.get(urljoin(swagger_ui_base_url, "<path:path>"))
             def swagger_ui_assets(path):
