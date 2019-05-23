@@ -11,7 +11,7 @@ def _read(fname):
 
 
 REQUIREMENTS = [l for l in _read('requirements.txt').split('\n') if l and not l.startswith('#')]
-VERSION = '2.0.0'
+VERSION = '2.0.1'
 
 setup(
         name='bottle-swagger-2',
@@ -28,7 +28,7 @@ setup(
         platforms='any',
         packages=["bottle_swagger"],
         package_data={"bottle_swagger": ["*.png", "*.html", "*.html.st", "*.css", "*.js"]},
-        setup_requires=['sphinx', 'sphinx_rtd_theme'],
+        # setup_requires=['sphinx', 'sphinx_rtd_theme'],
         install_requires=REQUIREMENTS,
         tests_require=REQUIREMENTS + ["tox", "webtest"],
         classifiers=[
