@@ -27,7 +27,10 @@ setup(
         license='MIT',
         platforms='any',
         packages=["bottle_swagger"],
+        package_data={"bottle_swagger": ["*.png", "*.html", "*.html.st", "*.css", "*.js"]},
+        setup_requires=['sphinx', 'sphinx_rtd_theme'],
         install_requires=REQUIREMENTS,
+        tests_require=REQUIREMENTS + ["tox", "webtest"],
         classifiers=[
             'Environment :: Web Environment',
             'Environment :: Plugins',
@@ -44,4 +47,5 @@ setup(
             'Topic :: Internet :: WWW/HTTP :: Dynamic Content',
             'Topic :: Software Development :: Libraries :: Python Modules'
         ],
+        include_package_data=True
 )
