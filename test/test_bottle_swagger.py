@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from bottle import Bottle, redirect
+from bottle import Bottle, redirect, request
 from bottle_swagger import SwaggerPlugin
 from webtest import TestApp
 
@@ -134,12 +134,18 @@ class TestBottleSwagger(TestCase):
         }
     }
 
+    def check_for_request_addons(self):
+        self.assertIsNotNone(getattr(request, 'swagger_data'))
+        self.assertIsNotNone(getattr(request, 'swagger_op'))
+        return True
+
     def test_valid_get_request_and_response(self):
-        response = self._test_request()
+
+        response = self._test_request(extra_check=self.check_for_request_addons)
         self.assertEqual(response.status_int, 200)
 
     def test_valid_post_request_and_response(self):
-        response = self._test_request(method='POST')
+        response = self._test_request(method='POST', extra_check=self.check_for_request_addons)
         self.assertEqual(response.status_int, 200)
 
     def test_invalid_request(self):
@@ -173,8 +179,11 @@ class TestBottleSwagger(TestCase):
         response = self._test_request(url="/invalid")
         self._assert_error_response(response, 404)
 
+        response = self._test_request(url="/thing/invalid")
+        self._assert_error_response(response, 404)
+
     def test_ignore_invalid_route(self):
-        swagger_plugin = self._make_swagger_plugin(ignore_undefined_routes=True)
+        swagger_plugin = self._make_swagger_plugin(ignore_undefined_api_routes=True)
         response = self._test_request(swagger_plugin=swagger_plugin, url="/invalid")
         self.assertEqual(response.status_int, 200)
         response = self._test_request(swagger_plugin=swagger_plugin, url="/invalid", method='POST',
@@ -190,7 +199,7 @@ class TestBottleSwagger(TestCase):
             self.assertEqual(response.status_int, 302)
 
         _test_redirect(self._make_swagger_plugin())
-        _test_redirect(self._make_swagger_plugin(ignore_undefined_routes=True))
+        _test_redirect(self._make_swagger_plugin(ignore_undefined_api_routes=True))
 
     def test_path_parameters(self):
         response = self._test_request(url="/thing/123", route_url="/thing/<thing_id>")
@@ -209,18 +218,31 @@ class TestBottleSwagger(TestCase):
         self.assertEqual(response.status_int, 200)
 
     def test_formdata_parameters(self):
-        response = self._test_request(url="/thing_formdata", route_url="/thing_formdata", method='POST', request_json='thing_id=123', content_type='multipart/form-data')
+        response = self._test_request(
+            url="/thing_formdata", route_url="/thing_formdata", method='POST',
+            request_json='thing_id=123', content_type='multipart/form-data'
+        )
         self.assertEqual(response.status_int, 200)
 
     def test_get_swagger_schema(self):
         bottle_app = Bottle()
         bottle_app.install(self._make_swagger_plugin())
         test_app = TestApp(bottle_app)
-        response = test_app.get(SwaggerPlugin.DEFAULT_SWAGGER_SCHEMA_URL)
+        response = test_app.get(SwaggerPlugin.DEFAULT_SWAGGER_SCHEMA_SUBURL)
         self.assertEqual(response.json, self.SWAGGER_DEF)
 
+    def test_get_swagger_ui(self):
+        bottle_app = Bottle()
+        bottle_app.install(self._make_swagger_plugin(serve_swagger_ui=True))
+        test_app = TestApp(bottle_app)
+        response = test_app.get("/ui/")
+        self.assertEqual(response.status_int, 200)
+        for keyword in ["html", "swagger-ui", "/swagger.json"]:
+            assert keyword in response.text
+
     def _test_request(self, swagger_plugin=None, method='GET', url='/thing', route_url=None, request_json=VALID_JSON,
-                      response_json=VALID_JSON, headers=None, content_type='application/json'):
+                      response_json=VALID_JSON, headers=None, content_type='application/json',
+                      extra_check=lambda *args, **kwargs: True):
         if swagger_plugin is None:
             swagger_plugin = self._make_swagger_plugin()
         if response_json is None:
@@ -233,6 +255,7 @@ class TestBottleSwagger(TestCase):
 
         @bottle_app.route(route_url, method)
         def do_thing(*args, **kwargs):
+            extra_check(*args, **kwargs)
             return response_json() if hasattr(response_json, "__call__") else response_json
 
         test_app = TestApp(bottle_app)
@@ -242,7 +265,9 @@ class TestBottleSwagger(TestCase):
             if content_type == 'application/json':
                 response = test_app.post_json(url, request_json, expect_errors=True, headers=headers)
             else:
-                response = test_app.post(url, request_json, content_type=content_type, expect_errors=True, headers=headers)
+                response = test_app.post(
+                    url, request_json, content_type=content_type, expect_errors=True, headers=headers
+                )
         else:
 
             raise Exception("Invalid method {}".format(method))
@@ -261,8 +286,8 @@ class TestBottleSwagger(TestCase):
         self.assertEqual(response.status_int, expected_response_status)
 
     def _assert_error_response(self, response, expected_status):
-        self.assertEqual(response.status_int, expected_status)
-        self.assertEqual(response.json['code'], expected_status)
+        self.assertEqual(expected_status, response.status_int)
+        self.assertEqual(expected_status, response.json['code'])
         self.assertIsNotNone(response.json['message'])
 
     def _make_swagger_plugin(self, *args, **kwargs):
