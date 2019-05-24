@@ -11,7 +11,7 @@ def _read(fname):
 
 
 REQUIREMENTS = [l for l in _read('requirements.txt').split('\n') if l and not l.startswith('#')]
-VERSION = '2.0.1'
+VERSION = '2.0.3'
 
 setup(
         name='bottle-swagger-2',
@@ -19,9 +19,7 @@ setup(
         url='https://github.com/cope-systems/bottle-swagger',
         download_url='https://github.com/cope-systems/bottle-swaggerr/archive/v{}.tar.gz'.format(VERSION),
         description='Swagger Integration for Bottle',
-        long_description="""
-        bottle-swagger-2 is a revamped Swagger 2.0/Bravado integration for the Bottle web framework.
-        """.strip(),
+        long_description=_read("README.rst"),
         author='Robert Cope, Charles Blaxland',
         author_email='robert@copesystems.com, charles.blaxland@gmail.com',
         license='MIT',

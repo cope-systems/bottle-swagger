@@ -11,7 +11,7 @@ This project is a Bottle plugin for working with Swagger.
 `Bottle <http://bottlepy.org/>`_ is a Python web framework.
 `Swagger (OpenAPI) <http://swagger.io/>`_ is a standard for defining REST APIs.
 
-This plugin is derived from Charles Blaxland's bottle-swagger work:
+This plugin is derived from Charles Blaxland's bottle-swagger plugin:
 https://github.com/ampedandwired/bottle-swagger
 
 So if you are serving a REST API with Bottle,
@@ -84,6 +84,8 @@ There are a number of arguments that you can pass to the plugin constructor:
 
 * ``swagger_base_path`` - String (default ``None``) Used to set and override the ``basePath`` mechanic for telling bottle what subpath to serve the API from.
 
+* ``adjust_api_base_path`` - Boolean (default ``True``) Adjust the basePath reported by the swagger.json. This is important if your WSGI application is running under a subpath.
+
 * ``serve_swagger_schema`` - Boolean (default ``True``) indicating if the Swagger schema JSON should be served
 
 * ``swagger_schema_suburl`` - URL (default ``"/swagger.json"``) on which to serve the Swagger schema JSON from the API subpath
@@ -91,6 +93,8 @@ There are a number of arguments that you can pass to the plugin constructor:
 * ``serve_swagger_ui`` - Boolean (default ``False``) Should we use a built-in copy of Swagger UI to serve up docs for this API?
 
 * ``swagger_ui_suburl`` - String (default ``"/ui/"``) The API suburl to serve the built-in Swagger UI up at, if turned on.
+
+* ``swagger_ui_validator_url`` -- String (default ``None``) The URL for a Swagger spec validator. By default this is None (i.e. off).
 
 * ``extra_bravado_config`` - Dict (default ``None``) Any additional configuration items to pass to Bravado core.
 

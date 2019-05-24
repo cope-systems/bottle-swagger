@@ -18,15 +18,11 @@ with open(SWAGGER_UI_INDEX_TEMPLATE_PATH, 'r') as f:
     SWAGGER_UI_INDEX_TEMPLATE = f.read()
 
 
-def render_index_html(swagger_spec_url):
-    return SimpleTemplate(SWAGGER_UI_INDEX_TEMPLATE).render(swagger_spec_url=swagger_spec_url)
-
-
-try:
-    from bottle_swagger import SWAGGER_UI_DIR, render_index_html
-    SWAGGER_UI_IMPORT_SUCCESS = True
-except ImportError:
-    SWAGGER_UI_IMPORT_SUCCESS = False
+def render_index_html(swagger_spec_url, validator_url=None):
+    return SimpleTemplate(SWAGGER_UI_INDEX_TEMPLATE).render(
+        swagger_spec_url=swagger_spec_url,
+        validator_url=json_dumps(validator_url)
+    )
 
 
 def _error_response(status, e):
@@ -128,11 +124,14 @@ class SwaggerPlugin(object):
         route isn't found for the API subpath, and ignore_missing_routes has been set True.
     * ``exception_handler`` -- (Base Exception -> HTTP Response.) This handler is triggered if the
         request callback threw an exception.
-    * ``swagger_base_path`` -- (str) Override the base path for the API specified in the swagger spec/
+    * ``swagger_base_path`` -- (str) Override the base path for the API specified in the swagger spec?
+    * ``adjust_api_base_path`` - Boolean (default ``True``) Adjust the basePath reported by the swagger.json.
+        This is important if your WSGI application is running under a subpath.
     * ``serve_swagger_schema`` -- (bool) Should we serve the Swagger schema?
     * ``swagger_schema_suburl`` -- (str) The subpath in the API to serve the swagger schema.
     * ``serve_swagger_ui`` -- (bool) Should we also serve a copy of Swagger UI?
     * ``swagger_ui_suburl`` -- (str) The subpath from the API to serve the integrate Swagger UI up at.
+    * ``swagger_ui_validator_url`` -- (str) The URL for a Swagger spec validator. By default this is None (i.e. off).
     * ``extra_bravado_config`` -- (object) Any additional Bravado configuration items you may want.
     """
     DEFAULT_SWAGGER_SCHEMA_SUBURL = '/swagger.json'
@@ -157,10 +156,12 @@ class SwaggerPlugin(object):
                  swagger_op_not_found_handler=default_not_found_handler,
                  exception_handler=default_server_error_handler,
                  swagger_base_path=None,
+                 adjust_api_base_path=True,
                  serve_swagger_schema=True,
                  swagger_schema_suburl=DEFAULT_SWAGGER_SCHEMA_SUBURL,
                  serve_swagger_ui=False,
                  swagger_ui_suburl=DEFAULT_SWAGGER_UI_SUBURL,
+                 swagger_ui_validator_url=None,
                  extra_bravado_config=None):
         """
         Add Swagger validation to your Bottle application.
@@ -201,6 +202,9 @@ class SwaggerPlugin(object):
         :type exception_handler: BaseException -> HTTP Response.
         :param swagger_base_path: Override the base path for the API specified in the swagger spec/
         :type swagger_base_path: str
+        :param adjust_api_base_path: Adjust the basePath reported by the swagger.json. This is important if your
+            WSGI application is running under a subpath.
+        :type adjust_api_base_path: bool
         :param serve_swagger_schema: Should we serve the Swagger schema?
         :type serve_swagger_schema: bool
         :param swagger_schema_suburl: The subpath in the API to serve the swagger schema.
@@ -209,6 +213,8 @@ class SwaggerPlugin(object):
         :type serve_swagger_ui: bool
         :param swagger_ui_suburl: The subpath from the API to serve the integrate Swagger UI up at.
         :type swagger_ui_suburl: str
+        :param swagger_ui_validator_url: The URL for a Swagger validator instance. If None, validation in the UI is off.
+        :type swagger_ui_validator_url: str | NoneType
         :param extra_bravado_config: Any additional Bravado configuration items you may want.
         :type extra_bravado_config: object
         """
@@ -225,9 +231,7 @@ class SwaggerPlugin(object):
         self.exception_handler = exception_handler
         self.serve_swagger_schema = serve_swagger_schema or self.serve_swagger_ui
         self.serve_swagger_ui = serve_swagger_ui
-
-        if self.serve_swagger_ui and not SWAGGER_UI_IMPORT_SUCCESS:
-            raise ImportError("Unable to load built-in Swagger UI!")
+        self.swagger_ui_validator_url = swagger_ui_validator_url
 
         self.swagger_schema_suburl = swagger_schema_suburl
         self.swagger_ui_suburl = swagger_ui_suburl
@@ -245,6 +249,7 @@ class SwaggerPlugin(object):
 
         self.swagger = Spec.from_dict(swagger_def, config=self.bravado_config)
         self.swagger_base_path = swagger_base_path or urlparse(self.swagger.api_url).path or '/'
+        self.adjust_api_base_path = adjust_api_base_path
 
     def apply(self, callback, route):
         def wrapper(*args, **kwargs):
@@ -259,12 +264,18 @@ class SwaggerPlugin(object):
         if self.serve_swagger_schema:
             @app.get(swagger_schema_url)
             def swagger_schema():
-                return self.swagger.spec_dict
+                spec_dict = self.swagger.spec_dict
+                if self.adjust_api_base_path and "basePath" in spec_dict:
+                    spec_dict["basePath"] = urljoin(
+                        urljoin("/", request.environ.get('SCRIPT_NAME', '').strip('/') + '/'),
+                        self.swagger_base_path.lstrip("/")
+                    )
+                return spec_dict
 
         if self.serve_swagger_ui:
             @app.get(swagger_ui_base_url)
             def swagger_ui_index():
-                return render_index_html(app.get_url(swagger_schema_url))
+                return render_index_html(app.get_url(swagger_schema_url), validator_url=self.swagger_ui_validator_url)
 
             @app.get(urljoin(swagger_ui_base_url, "<path:path>"))
             def swagger_ui_assets(path):
