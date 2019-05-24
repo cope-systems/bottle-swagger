@@ -124,7 +124,9 @@ class SwaggerPlugin(object):
         route isn't found for the API subpath, and ignore_missing_routes has been set True.
     * ``exception_handler`` -- (Base Exception -> HTTP Response.) This handler is triggered if the
         request callback threw an exception.
-    * ``swagger_base_path`` -- (str) Override the base path for the API specified in the swagger spec/
+    * ``swagger_base_path`` -- (str) Override the base path for the API specified in the swagger spec?
+    * ``adjust_api_base_path`` - Boolean (default ``True``) Adjust the basePath reported by the swagger.json.
+        This is important if your WSGI application is running under a subpath.
     * ``serve_swagger_schema`` -- (bool) Should we serve the Swagger schema?
     * ``swagger_schema_suburl`` -- (str) The subpath in the API to serve the swagger schema.
     * ``serve_swagger_ui`` -- (bool) Should we also serve a copy of Swagger UI?
@@ -154,6 +156,7 @@ class SwaggerPlugin(object):
                  swagger_op_not_found_handler=default_not_found_handler,
                  exception_handler=default_server_error_handler,
                  swagger_base_path=None,
+                 adjust_api_base_path=True,
                  serve_swagger_schema=True,
                  swagger_schema_suburl=DEFAULT_SWAGGER_SCHEMA_SUBURL,
                  serve_swagger_ui=False,
@@ -199,6 +202,9 @@ class SwaggerPlugin(object):
         :type exception_handler: BaseException -> HTTP Response.
         :param swagger_base_path: Override the base path for the API specified in the swagger spec/
         :type swagger_base_path: str
+        :param adjust_api_base_path: Adjust the basePath reported by the swagger.json. This is important if your
+            WSGI application is running under a subpath.
+        :type adjust_api_base_path: bool
         :param serve_swagger_schema: Should we serve the Swagger schema?
         :type serve_swagger_schema: bool
         :param swagger_schema_suburl: The subpath in the API to serve the swagger schema.
@@ -243,6 +249,7 @@ class SwaggerPlugin(object):
 
         self.swagger = Spec.from_dict(swagger_def, config=self.bravado_config)
         self.swagger_base_path = swagger_base_path or urlparse(self.swagger.api_url).path or '/'
+        self.adjust_api_base_path = adjust_api_base_path
 
     def apply(self, callback, route):
         def wrapper(*args, **kwargs):
@@ -257,7 +264,13 @@ class SwaggerPlugin(object):
         if self.serve_swagger_schema:
             @app.get(swagger_schema_url)
             def swagger_schema():
-                return self.swagger.spec_dict
+                spec_dict = self.swagger.spec_dict
+                if self.adjust_api_base_path and "basePath" in spec_dict:
+                    spec_dict["basePath"] = urljoin(
+                        urljoin("/", request.environ.get('SCRIPT_NAME', '').strip('/') + '/'),
+                        self.swagger_base_path.lstrip("/")
+                    )
+                return spec_dict
 
         if self.serve_swagger_ui:
             @app.get(swagger_ui_base_url)

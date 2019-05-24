@@ -84,6 +84,8 @@ There are a number of arguments that you can pass to the plugin constructor:
 
 * ``swagger_base_path`` - String (default ``None``) Used to set and override the ``basePath`` mechanic for telling bottle what subpath to serve the API from.
 
+* ``adjust_api_base_path`` - Boolean (default ``True``) Adjust the basePath reported by the swagger.json. This is important if your WSGI application is running under a subpath.
+
 * ``serve_swagger_schema`` - Boolean (default ``True``) indicating if the Swagger schema JSON should be served
 
 * ``swagger_schema_suburl`` - URL (default ``"/swagger.json"``) on which to serve the Swagger schema JSON from the API subpath
