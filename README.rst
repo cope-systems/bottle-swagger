@@ -27,16 +27,17 @@ Requirements
 
 * Python >= 2.7
 * Bottle >= 0.12
-* Swagger specification >= 2.0
+* Swagger specification == 2.0
 
 This project relies on `bravado-core <https://github.com/Yelp/bravado-core>`_ to perform the swagger schema validation,
-so any version of the Swagger spec supported by that project is also supported by this plugin.
+so any version of the Swagger spec supported by that project is also supported by this plugin. Note that Bravado Core
+does not yet support the OpenAPI 3.0 specification, thus this plugin does not work with OpenAPI 3.0 yet.
 
 Installation
 ------------
 ::
 
-  $ pip install bottle-swagger
+  $ pip install bottle-swagger-2
 
 Usage
 -----

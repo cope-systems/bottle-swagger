@@ -11,7 +11,7 @@ def _read(fname):
 
 
 REQUIREMENTS = [l for l in _read('requirements.txt').split('\n') if l and not l.startswith('#')]
-VERSION = '2.0.3'
+VERSION = '2.0.4'
 
 setup(
         name='bottle-swagger-2',

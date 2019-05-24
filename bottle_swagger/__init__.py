@@ -251,6 +251,10 @@ class SwaggerPlugin(object):
         self.swagger_base_path = swagger_base_path or urlparse(self.swagger.api_url).path or '/'
         self.adjust_api_base_path = adjust_api_base_path
 
+        fixed_base_path = (self.swagger_base_path.rstrip("/")) + "/"
+        self.swagger_schema_url = urljoin(fixed_base_path, self.swagger_schema_suburl.lstrip("/"))
+        self.swagger_ui_base_url = urljoin(fixed_base_path, self.swagger_ui_suburl.lstrip("/"))
+
     def apply(self, callback, route):
         def wrapper(*args, **kwargs):
             return self._swagger_validate(callback, route, *args, **kwargs)
@@ -258,11 +262,8 @@ class SwaggerPlugin(object):
         return wrapper
 
     def setup(self, app):
-        swagger_schema_url = urljoin(self.swagger_base_path, self.swagger_schema_suburl)
-        swagger_ui_base_url = urljoin(self.swagger_base_path, self.swagger_ui_suburl)
-
         if self.serve_swagger_schema:
-            @app.get(swagger_schema_url)
+            @app.get(self.swagger_schema_url)
             def swagger_schema():
                 spec_dict = self.swagger.spec_dict
                 if self.adjust_api_base_path and "basePath" in spec_dict:
@@ -273,11 +274,11 @@ class SwaggerPlugin(object):
                 return spec_dict
 
         if self.serve_swagger_ui:
-            @app.get(swagger_ui_base_url)
+            @app.get(self.swagger_ui_base_url)
             def swagger_ui_index():
-                return render_index_html(app.get_url(swagger_schema_url), validator_url=self.swagger_ui_validator_url)
+                return render_index_html(app.get_url(self.swagger_schema_url), validator_url=self.swagger_ui_validator_url)
 
-            @app.get(urljoin(swagger_ui_base_url, "<path:path>"))
+            @app.get(urljoin(self.swagger_ui_base_url, "<path:path>"))
             def swagger_ui_assets(path):
                 return static_file(path, SWAGGER_UI_DIR)
 
@@ -288,11 +289,9 @@ class SwaggerPlugin(object):
 
             if not route.rule.startswith(self.swagger_base_path) or self.ignore_undefined_routes:
                 return callback(*args, **kwargs)
-            elif self.serve_swagger_schema \
-                    and route.rule == urljoin(self.swagger_base_path, self.swagger_schema_suburl):
+            elif self.serve_swagger_schema  and route.rule == self.swagger_schema_url:
                 return callback(*args, **kwargs)
-            elif self.serve_swagger_ui \
-                    and route.rule.startswith(urljoin(self.swagger_base_path, self.swagger_ui_suburl)):
+            elif self.serve_swagger_ui and route.rule.startswith(self.swagger_ui_base_url):
                 return callback(*args, **kwargs)
             else:
                 return self.swagger_op_not_found_handler(route)
