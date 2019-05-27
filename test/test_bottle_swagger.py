@@ -130,6 +130,24 @@ class TestBottleSwagger(TestCase):
                         }
                     }
                 }
+            },
+            "/thing_no_resp_body": {
+                "post": {
+                    "responses": {
+                        "200": {
+                            "description": "Succeeded."
+                        }
+                    }
+                }
+            },
+            '/thing_delete': {
+                "delete": {
+                    "responses": {
+                        "200": {
+                            "description": "Succeeded."
+                        }
+                    }
+                }
             }
         }
     }
@@ -231,6 +249,15 @@ class TestBottleSwagger(TestCase):
         response = test_app.get(SwaggerPlugin.DEFAULT_SWAGGER_SCHEMA_SUBURL)
         self.assertEqual(response.json, self.SWAGGER_DEF)
 
+    def test_get_swagger_schema_altered_basepath(self):
+        bottle_app = Bottle()
+        spec_with_basepath = dict(self.SWAGGER_DEF)
+        spec_with_basepath['basePath'] = "/api/1.0"
+        bottle_app.install(SwaggerPlugin(spec_with_basepath))
+        test_app = TestApp(bottle_app)
+        response = test_app.get("/api/1.0" + SwaggerPlugin.DEFAULT_SWAGGER_SCHEMA_SUBURL)
+        self.assertEqual(response.json, spec_with_basepath)
+
     def test_get_swagger_ui(self):
         bottle_app = Bottle()
         bottle_app.install(self._make_swagger_plugin(serve_swagger_ui=True))
@@ -239,6 +266,35 @@ class TestBottleSwagger(TestCase):
         self.assertEqual(response.status_int, 200)
         for keyword in ["html", "swagger-ui", "/swagger.json"]:
             assert keyword in response.text
+
+    def test_empty_response_body(self):
+        response = self._test_request(
+            url="/thing_no_resp_body",
+            method='POST',
+            response_json=''
+        )
+        self.assertEqual(response.status_int, 200)
+
+        response = self._test_request(
+            url="/thing_no_resp_body",
+            method='POST',
+            response_json='{}'
+        )
+        self.assertEqual(response.status_int, 200)
+
+        response = self._test_request(
+            url="/thing_no_resp_body",
+            method='POST',
+            response_json=b'{}'
+        )
+        self.assertEqual(response.status_int, 200)
+
+        response = self._test_request(
+            url="/thing_delete",
+            method='DELETE',
+            response_json=''
+        )
+        self.assertEqual(response.status_int, 200)
 
     def _test_request(self, swagger_plugin=None, method='GET', url='/thing', route_url=None, request_json=VALID_JSON,
                       response_json=VALID_JSON, headers=None, content_type='application/json',
@@ -266,6 +322,15 @@ class TestBottleSwagger(TestCase):
                 response = test_app.post_json(url, request_json, expect_errors=True, headers=headers)
             else:
                 response = test_app.post(
+                    url, request_json, content_type=content_type, expect_errors=True, headers=headers
+                )
+        elif method.upper() == 'DELETE':
+            if content_type == 'aplication/json':
+                response = test_app.delete_json(
+                    url, request_json, expect_errors=True, headers=headers
+                )
+            else:
+                response = test_app.delete(
                     url, request_json, content_type=content_type, expect_errors=True, headers=headers
                 )
         else:

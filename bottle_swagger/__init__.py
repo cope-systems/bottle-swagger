@@ -1,4 +1,4 @@
-__version__ = (2, 0, 0)
+__version__ = (2, 0, 5)
 
 import os
 import re
@@ -9,6 +9,7 @@ from bravado_core.response import OutgoingResponse, validate_response, get_respo
 from bravado_core.spec import Spec
 from jsonschema import ValidationError
 from six.moves.urllib.parse import urljoin, urlparse
+from six import string_types, binary_type
 from bottle import SimpleTemplate
 
 SWAGGER_UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'swagger-ui-3.22.2-dist')
@@ -96,7 +97,7 @@ class SwaggerPlugin(object):
         >>> from bottle import Bottle
         >>> from bottle_swagger import SwaggerPlugin
         >>> my_app = Bottle()
-        >>> my_swagger_def = load_my_swagger_def_from_somewhere()  # You implement this to return a Swagger spec dict.
+        >>> my_swagger_def = {}  # This should be your actual swagger spec, as a Python dict.
         >>> my_plugin = SwaggerPlugin(my_swagger_def, serve_swagger_ui=True)
         >>> my_app.install(my_plugin)
 
@@ -276,7 +277,10 @@ class SwaggerPlugin(object):
         if self.serve_swagger_ui:
             @app.get(self.swagger_ui_base_url)
             def swagger_ui_index():
-                return render_index_html(app.get_url(self.swagger_schema_url), validator_url=self.swagger_ui_validator_url)
+                return render_index_html(
+                    app.get_url(self.swagger_schema_url),
+                    validator_url=self.swagger_ui_validator_url
+                )
 
             @app.get(urljoin(self.swagger_ui_base_url, "<path:path>"))
             def swagger_ui_assets(path):
@@ -367,6 +371,10 @@ class BottleIncomingRequest(IncomingRequest):
     def form(self):
         return self.request.forms
 
+    @property
+    def files(self):
+        return self.request.files
+
 
 class BottleOutgoingResponse(OutgoingResponse):
     """
@@ -390,5 +398,25 @@ class BottleOutgoingResponse(OutgoingResponse):
         return self.response.headers
 
     @property
+    def raw_bytes(self):
+        if not self.response.body:
+            return b''
+        elif isinstance(self.response.body, string_types):
+            return self.response.body.encode('utf-8', 'ignore')
+        elif isinstance(self.response.body, binary_type):
+            return self.response.body
+        else:
+            # TODO: Unsure if this is quite the correct thing to do.
+            return str(self.response.body).encode('utf-8', 'ignore')
+
+    @property
     def text(self):
-        return self.response.status
+        if not self.response.body:
+            return ''
+        elif isinstance(self.response.body, string_types):
+            return self.response.body
+        elif isinstance(self.response.body, binary_type):
+            return self.response.body.decode('utf-8', 'ignore')
+        else:
+            # TODO: Unsure if this is quite the correct thing to do.
+            return str(self.response.body)
