@@ -230,8 +230,8 @@ class SwaggerPlugin(object):
         self.invalid_response_handler = invalid_response_handler
         self.swagger_op_not_found_handler = swagger_op_not_found_handler
         self.exception_handler = exception_handler
-        self.serve_swagger_schema = serve_swagger_schema or self.serve_swagger_ui
         self.serve_swagger_ui = serve_swagger_ui
+        self.serve_swagger_schema = serve_swagger_schema or serve_swagger_ui
         self.swagger_ui_validator_url = swagger_ui_validator_url
 
         self.swagger_schema_suburl = swagger_schema_suburl
