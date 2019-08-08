@@ -1,7 +1,8 @@
-__version__ = (2, 0, 6)
+__version__ = (2, 0, 7)
 
 import os
 import re
+import logging
 from bottle import request, response, HTTPResponse, json_dumps, static_file
 from bravado_core.exception import MatchingResponseNotFound
 from bravado_core.request import IncomingRequest, unmarshal_request
@@ -12,11 +13,15 @@ from six.moves.urllib.parse import urljoin, urlparse
 from six import string_types, binary_type
 from bottle import SimpleTemplate
 
+
 SWAGGER_UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'swagger-ui-3.22.2-dist')
 SWAGGER_UI_INDEX_TEMPLATE_PATH = os.path.join(SWAGGER_UI_DIR, 'index.html.st')
 
 with open(SWAGGER_UI_INDEX_TEMPLATE_PATH, 'r') as f:
     SWAGGER_UI_INDEX_TEMPLATE = f.read()
+
+
+plugin_logger = logging.getLogger(__name__)
 
 
 def render_index_html(swagger_spec_url, validator_url=None):
@@ -161,6 +166,7 @@ class SwaggerPlugin(object):
                  serve_swagger_schema=True,
                  swagger_schema_suburl=DEFAULT_SWAGGER_SCHEMA_SUBURL,
                  serve_swagger_ui=False,
+                 swagger_ui_schema_url=None,
                  swagger_ui_suburl=DEFAULT_SWAGGER_UI_SUBURL,
                  swagger_ui_validator_url=None,
                  extra_bravado_config=None):
@@ -212,14 +218,20 @@ class SwaggerPlugin(object):
         :type swagger_schema_suburl: str
         :param serve_swagger_ui: Should we also serve a copy of Swagger UI?
         :type serve_swagger_ui: bool
+        :param swagger_ui_schema_url: If this is not None, this will be used to set the default URL used with the
+            bundled Swagger UI instance, if enabled. If it is a string, this will be the new Swagger spec URL; if this
+            is an arity-0 callable, this will be evaluated each time the UI is served up, and result will be the
+            spec URL that is served up. Default: None
+        :type swagger_ui_schema_url: NoneType | str | -> str
         :param swagger_ui_suburl: The subpath from the API to serve the integrate Swagger UI up at.
         :type swagger_ui_suburl: str
         :param swagger_ui_validator_url: The URL for a Swagger validator instance. If None, validation in the UI is off.
-        :type swagger_ui_validator_url: str | NoneType
+            If this is set to an arity 0 callable, this will be evaluated each time the Swagger UI is constructed.
+        :type swagger_ui_validator_url: str | -> str | NoneType
         :param extra_bravado_config: Any additional Bravado configuration items you may want.
         :type extra_bravado_config: object
         """
-
+        plugin_logger.debug("Initializing Bottle Swagger Plugin...")
         swagger_def = dict(swagger_def)
         if swagger_base_path is not None:
             swagger_def.update(basePath=swagger_base_path)
@@ -231,7 +243,17 @@ class SwaggerPlugin(object):
         self.swagger_op_not_found_handler = swagger_op_not_found_handler
         self.exception_handler = exception_handler
         self.serve_swagger_ui = serve_swagger_ui
-        self.serve_swagger_schema = serve_swagger_schema or serve_swagger_ui
+        self.swagger_ui_schema_url = swagger_ui_schema_url
+
+        self.serve_swagger_schema = serve_swagger_schema
+        if not serve_swagger_schema and swagger_ui_schema_url is None and serve_swagger_ui:
+            plugin_logger.warning(
+                "Swagger UI enabled, but plugin instance has no configured swagger specification source!"
+            )
+            plugin_logger.warning(
+                "Defaulting to an empty Swagger specification source for the UI, this is likely a misconfiguration!"
+            )
+
         self.swagger_ui_validator_url = swagger_ui_validator_url
 
         self.swagger_schema_suburl = swagger_schema_suburl
@@ -255,6 +277,7 @@ class SwaggerPlugin(object):
         fixed_base_path = (self.swagger_base_path.rstrip("/")) + "/"
         self.swagger_schema_url = urljoin(fixed_base_path, self.swagger_schema_suburl.lstrip("/"))
         self.swagger_ui_base_url = urljoin(fixed_base_path, self.swagger_ui_suburl.lstrip("/"))
+        plugin_logger.debug("Bottle Swagger Plugin Initialization Completed!")
 
     def apply(self, callback, route):
         def wrapper(*args, **kwargs):
@@ -277,9 +300,21 @@ class SwaggerPlugin(object):
         if self.serve_swagger_ui:
             @app.get(self.swagger_ui_base_url)
             def swagger_ui_index():
+                if self.swagger_ui_schema_url is not None and callable(self.swagger_ui_schema_url):
+                    schema_url = self.swagger_ui_schema_url()
+                elif self.swagger_ui_schema_url is not None:
+                    schema_url = self.swagger_ui_schema_url
+                elif self.serve_swagger_schema:
+                    schema_url = app.get_url(self.swagger_schema_url)
+                else:
+                    schema_url = ""
+                if self.swagger_ui_validator_url is not None and callable(self.swagger_ui_validator_url):
+                    validator_url = self.swagger_ui_validator_url()
+                else:
+                    validator_url = self.swagger_ui_validator_url
                 return render_index_html(
-                    app.get_url(self.swagger_schema_url),
-                    validator_url=self.swagger_ui_validator_url
+                    schema_url,
+                    validator_url=validator_url
                 )
 
             @app.get(urljoin(self.swagger_ui_base_url, "<path:path>"))

@@ -93,9 +93,11 @@ There are a number of arguments that you can pass to the plugin constructor:
 
 * ``serve_swagger_ui`` - Boolean (default ``False``) Should we use a built-in copy of Swagger UI to serve up docs for this API?
 
+* ``swagger_ui_schema_url`` - String or Arity 0 callable returning a string (default ``None``) If this is not none and the Swagger UI is turned on, this will be used to set the Swagger schema URL from which the UI draws the schema by default. If this is an arity 0 callable (i.e. a function with no arguments), this will be evaluated every time the UI is generated, which may allow the developer to dynamically select the schema URL.
+
 * ``swagger_ui_suburl`` - String (default ``"/ui/"``) The API suburl to serve the built-in Swagger UI up at, if turned on.
 
-* ``swagger_ui_validator_url`` -- String (default ``None``) The URL for a Swagger spec validator. By default this is None (i.e. off).
+* ``swagger_ui_validator_url`` -- String (default ``None``) The URL for a Swagger spec validator. By default this is None (i.e. off). This may also be an arity 0 callable that will dynamically select the validator URL when the UI is generated.
 
 * ``extra_bravado_config`` - Dict (default ``None``) Any additional configuration items to pass to Bravado core.
 
