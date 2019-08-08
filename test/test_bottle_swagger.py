@@ -308,6 +308,94 @@ class TestBottleSwagger(TestCase):
         response = test_app.get("/")
         self.assertEqual(response.status_int, 200)
 
+        response = test_app.get("/swagger.json", expect_errors=True)
+        self.assertEqual(response.status_int, 404)
+
+        response = test_app.get("/ui/", expect_errors=True)
+        self.assertEqual(response.status_int, 404)
+
+    def test_serve_ui_but_not_swagger_schema(self):
+        bottle_app = Bottle()
+        bottle_app.install(self._make_swagger_plugin(
+            serve_swagger_ui=True, serve_swagger_schema=False, ignore_undefined_api_routes=True
+        ))
+
+        @bottle_app.route("/", "GET")
+        def index():
+            return "test"
+
+        test_app = TestApp(bottle_app)
+        response = test_app.get("/")
+        self.assertEqual(response.status_int, 200)
+
+        response = test_app.get("/swagger.json", expect_errors=True)
+        self.assertEqual(response.status_int, 404)
+
+        response = test_app.get("/ui/", expect_errors=False)
+        self.assertEqual(response.status_int, 200)
+
+    def test_serve_ui_with_custom_string_spec_url(self):
+        bottle_app = Bottle()
+        bottle_app.install(self._make_swagger_plugin(
+            serve_swagger_ui=True, serve_swagger_schema=False, ignore_undefined_api_routes=True,
+            swagger_ui_schema_url="http://foo.com/wagger.json"
+        ))
+
+        @bottle_app.route("/", "GET")
+        def index():
+            return "test"
+
+        test_app = TestApp(bottle_app)
+        response = test_app.get("/")
+        self.assertEqual(response.status_int, 200)
+
+        response = test_app.get("/swagger.json", expect_errors=True)
+        self.assertEqual(response.status_int, 404)
+
+        response = test_app.get("/ui/", expect_errors=False)
+        self.assertEqual(response.status_int, 200)
+        response.mustcontain("http://foo.com/wagger.json")
+        assert "swagger.json" not in response
+
+    def test_serve_ui_with_custom_callable_spec_and_validator_urls(self):
+        bottle_app = Bottle()
+        current_schema_url_container = ["http://bar.com/wat.json"]
+        current_validator_url_container = ["http://test.com/test"]
+
+        bottle_app.install(self._make_swagger_plugin(
+            serve_swagger_ui=True, serve_swagger_schema=False, ignore_undefined_api_routes=True,
+            swagger_ui_schema_url=lambda: current_schema_url_container[0],
+            swagger_ui_validator_url=lambda: current_validator_url_container[0]
+        ))
+
+        @bottle_app.route("/", "GET")
+        def index():
+            return "test"
+
+        test_app = TestApp(bottle_app)
+        response = test_app.get("/")
+        self.assertEqual(response.status_int, 200)
+
+        response = test_app.get("/swagger.json", expect_errors=True)
+        self.assertEqual(response.status_int, 404)
+
+        response = test_app.get("/ui/", expect_errors=False)
+        self.assertEqual(response.status_int, 200)
+        response.mustcontain("http://bar.com/wat.json")
+        response.mustcontain("http://test.com/test")
+        assert "swagger.json" not in response
+
+        current_schema_url_container[0] = "http://hello.com/test.json"
+        current_validator_url_container[0] = "http://localhost:8080/other-test"
+
+        response = test_app.get("/ui/", expect_errors=False)
+        self.assertEqual(response.status_int, 200)
+        response.mustcontain("http://hello.com/test.json")
+        response.mustcontain("http://localhost:8080/other-test")
+        assert "swagger.json" not in response
+        assert "http://bar.com/wat.json" not in response
+        assert "http://test.com/test" not in response
+
     def _test_request(self, swagger_plugin=None, method='GET', url='/thing', route_url=None, request_json=VALID_JSON,
                       response_json=VALID_JSON, headers=None, content_type='application/json',
                       extra_check=lambda *args, **kwargs: True):
