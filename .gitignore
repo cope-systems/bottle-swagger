@@ -67,3 +67,5 @@ target/
 # Misc
 .direnv/
 .envrc
+
+doc/_build/
