@@ -17,7 +17,7 @@ setup(
         name='bottle-swagger-2',
         version=VERSION,
         url='https://github.com/cope-systems/bottle-swagger',
-        download_url='https://github.com/cope-systems/bottle-swaggerr/archive/v{}.tar.gz'.format(VERSION),
+        download_url='https://github.com/cope-systems/bottle-swagger/archive/v{}.tar.gz'.format(VERSION),
         description='Swagger Integration for Bottle',
         long_description=_read("README.rst"),
         author='Robert Cope, Charles Blaxland',

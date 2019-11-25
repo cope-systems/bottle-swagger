@@ -14,7 +14,8 @@ from six import string_types, binary_type
 from bottle import SimpleTemplate
 
 
-SWAGGER_UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'swagger-ui-3.22.2-dist')
+SWAGGER_UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+        'vendor', 'swagger-ui-3.24.1-dist')
 SWAGGER_UI_INDEX_TEMPLATE_PATH = os.path.join(SWAGGER_UI_DIR, 'index.html.st')
 
 with open(SWAGGER_UI_INDEX_TEMPLATE_PATH, 'r') as f:
