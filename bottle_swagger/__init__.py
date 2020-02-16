@@ -1,4 +1,4 @@
-__version__ = (2, 0, 8)
+__version__ = (2, 0, 9)
 
 import os
 import re
@@ -345,15 +345,19 @@ class SwaggerPlugin(object):
                 return self.invalid_request_handler(e)
 
             result = callback(*args, **kwargs)
+            result_payload = result.body if isinstance(result, HTTPResponse) else result
 
             try:
-                self._validate_response(swagger_op, result)
+                self._validate_response(swagger_op, result_payload)
             except (ValidationError, MatchingResponseNotFound) as e:
                 return self.invalid_response_handler(e)
 
             if self.auto_jsonify and isinstance(result, (dict, list)):
                 result = json_dumps(result)
                 response.content_type = 'application/json'
+            elif self.auto_jsonify and isinstance(result, HTTPResponse):
+                result.body = json_dumps(result_payload)
+                response.content_type = result.content_type = 'application/json'
         except Exception as e:
             # Bottle handles redirects by raising an HTTPResponse instance
             if isinstance(e, HTTPResponse):

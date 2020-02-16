@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from bottle import Bottle, redirect, request
+from bottle import Bottle, redirect, request, HTTPResponse
 from bottle_swagger import SwaggerPlugin
 from webtest import TestApp
 
@@ -164,6 +164,14 @@ class TestBottleSwagger(TestCase):
 
     def test_valid_post_request_and_response(self):
         response = self._test_request(method='POST', extra_check=self.check_for_request_addons)
+        self.assertEqual(response.status_int, 200)
+
+    def test_valid_post_response_as_http_body(self):
+        response = self._test_request(
+            method='POST',
+            extra_check=self.check_for_request_addons,
+            response_json=HTTPResponse(body=self.VALID_JSON)
+        )
         self.assertEqual(response.status_int, 200)
 
     def test_invalid_request(self):
