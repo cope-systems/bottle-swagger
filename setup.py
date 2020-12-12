@@ -11,7 +11,7 @@ def _read(fname):
 
 
 REQUIREMENTS = [l for l in _read('requirements.txt').split('\n') if l and not l.startswith('#')]
-VERSION = '2.0.9'
+VERSION = '2.0.10'
 
 setup(
         name='bottle-swagger-2',
@@ -37,7 +37,6 @@ setup(
             'License :: OSI Approved :: MIT License',
             'Operating System :: OS Independent',
             'Programming Language :: Python',
-            'Programming Language :: Python :: 2.7',
             'Programming Language :: Python :: 3.5',
             'Programming Language :: Python :: 3.6',
             'Programming Language :: Python :: 3.7',

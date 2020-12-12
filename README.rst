@@ -76,11 +76,15 @@ There are a number of arguments that you can pass to the plugin constructor:
 
 * ``ignore_undefined_api_routes`` - Boolean (default ``False``) Should any routes under the given base path that don't have a Swagger route automatically trigger a 404?
 
+* ``ignore_security_definitions`` - Boolean (default ``False``) Should we ignore the security requirements specified in the swagger spec? This allows you to use things like Cookie auth as an undocumented fallback without Bravado complaining.
+
 * ``auto_jsonify`` - Boolean (default ``False``) If the Swagger route handlers return a list or dict, should we attempt to automatically convert them to a JSON response?
 
 * ``invalid_request_handler`` - Callback called when request validation has failed. Default behaviour is to return a "400 Bad Request" response.
 
 * ``invalid_response_handler`` - Callback called when response validation has failed. Default behaviour is to return a "500 Server Error" response.
+
+ * ``invalid_security_handler`` -- (Exception -> HTTP Response) This handler is triggered when no valid forms of authentication matching the Swagger spec were in the incoming request. This is ignored if ``ignore_security_definitions`` is set to True.
 
 * ``swagger_op_not_found_handler`` - Callback called when no swagger operation matching the request was found in the swagger schema. Default behaviour is to return a "404 Not Found" response.
 

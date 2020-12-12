@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from bottle import Bottle, redirect, request, HTTPResponse
+from bottle import Bottle, redirect, request, HTTPResponse, debug
 from bottle_swagger import SwaggerPlugin
 from webtest import TestApp
 
@@ -8,6 +8,56 @@ from webtest import TestApp
 class TestBottleSwagger(TestCase):
     VALID_JSON = {"id": "123", "name": "foo"}
     INVALID_JSON = {"not_id": "123", "name": "foo"}
+
+    SWAGGER_DEF_WITH_SECURITY = {
+        "swagger": "2.0",
+        "info": {"version": "1.0.0", "title": "bottle-swagger"},
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "definitions": {
+            "Thing": {
+                "type": "object",
+            }
+        },
+        "securityDefinitions": {
+            "BasicAuth": {
+                "type": "basic"
+            },
+            "ApiKeyAuth": {
+                "type": "apiKey",
+                "in": "header",
+                'name': "X-API-Key"
+            }
+        },
+        "paths": {
+            "/thing": {
+                "get": {
+                    "security": [{"BasicAuth": []}],
+                    "responses": {
+                        "200": {
+                            "description": "",
+                            "schema": {
+                                "$ref": "#/definitions/Thing"
+                            }
+                        }
+                    }
+                }
+            },
+            "/thing2": {
+                "get": {
+                    "security": [{"ApiKeyAuth": []}],
+                    "responses": {
+                        "200": {
+                            "description": "",
+                            "schema": {
+                                "$ref": "#/definitions/Thing"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     SWAGGER_DEF = {
         "swagger": "2.0",
@@ -404,6 +454,71 @@ class TestBottleSwagger(TestCase):
         assert "http://bar.com/wat.json" not in response
         assert "http://test.com/test" not in response
 
+    def test_security_spec_functionality(self):
+        bottle_app = Bottle()
+        bottle_app.install(self._make_security_swagger_plugin())
+
+        @bottle_app.route("/thing", "GET")
+        def index():
+            assert request.auth is not None, "BasicAuth must be set"
+            return {}
+
+        @bottle_app.route("/thing2", "GET")
+        def bar():
+            assert 'X-API-Key' in request.swagger_data, 'API Key auth must be set'
+            return {}
+
+        test_app = TestApp(bottle_app)
+        old_auth = None
+        test_app.authorization = old_auth
+        resp = test_app.get("/thing2", headers={"X-API-Key": "foobar"})
+        assert resp.status_code == 200, resp.status + "\n" + resp.body.decode('utf-8')
+
+        test_app.authorization = old_auth
+        resp = test_app.get("/thing2", expect_errors=True)
+        assert resp.status_code == 401, resp.status + "\n" + resp.body.decode('utf-8')
+
+        test_app.authorization = ("Basic", ("foo", "bar"))
+        resp = test_app.get("/thing2", expect_errors=True)
+        assert resp.status_code == 401, resp.status + "\n" + resp.body.decode('utf-8')
+
+        test_app.authorization = ("Basic", ("foo", "bar"))
+        resp = test_app.get("/thing")
+        assert resp.status_code == 200, resp.status + "\n" + resp.body.decode('utf-8')
+
+        # Bravado does not support basic auth validation upstream ...
+        # test_app.authorization = old_auth
+        # resp = test_app.get("/thing", expect_errors=True)
+        # assert resp.status_code == 401, resp.status + "\n" + resp.body.decode('utf-8')
+
+        # test_app.authorization = old_auth
+        # resp = test_app.get("/thing", headers={"X-API-Key": "foobar"}, expect_errors=True)
+        # assert resp.status_code == 401, resp.status + "\n" + resp.body.decode('utf-8')
+
+    def test_security_spec_ignored(self):
+        bottle_app = Bottle()
+        debug()
+        bottle_app.install(self._make_security_swagger_plugin(
+            ignore_security_definitions=True
+        ))
+
+        @bottle_app.route("/thing", "GET")
+        def index():
+            return {}
+
+        @bottle_app.route("/thing2", "GET")
+        def bar():
+            return {}
+
+        test_app = TestApp(bottle_app)
+        test_app.authorization = None
+        resp = test_app.get("/thing")
+        assert resp.status_code == 200
+
+        test_app.authorization = None
+        resp = test_app.get("/thing2")
+        assert resp.status_code == 200
+
     def _test_request(self, swagger_plugin=None, method='GET', url='/thing', route_url=None, request_json=VALID_JSON,
                       response_json=VALID_JSON, headers=None, content_type='application/json',
                       extra_check=lambda *args, **kwargs: True):
@@ -465,3 +580,6 @@ class TestBottleSwagger(TestCase):
 
     def _make_swagger_plugin(self, *args, **kwargs):
         return SwaggerPlugin(self.SWAGGER_DEF, *args, **kwargs)
+
+    def _make_security_swagger_plugin(self, *args, **kwargs):
+        return SwaggerPlugin(self.SWAGGER_DEF_WITH_SECURITY, *args, **kwargs)

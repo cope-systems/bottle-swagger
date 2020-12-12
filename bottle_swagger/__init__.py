@@ -1,10 +1,10 @@
-__version__ = (2, 0, 9)
+__version__ = (2, 0, 10)
 
 import os
 import re
 import logging
 from bottle import request, response, HTTPResponse, json_dumps, static_file
-from bravado_core.exception import MatchingResponseNotFound
+from bravado_core.exception import MatchingResponseNotFound, SwaggerSecurityValidationError
 from bravado_core.request import IncomingRequest, unmarshal_request
 from bravado_core.response import OutgoingResponse, validate_response, get_response_spec
 from bravado_core.spec import Spec
@@ -75,6 +75,25 @@ def default_bad_request_handler(e):
     return _error_response(400, e)
 
 
+def default_invalid_security_handler(e):
+    """
+    The default error handler function for lack of auth
+    failures.
+
+    Returns a JSON payload of
+
+    {"code": 401, "message": str(e)}
+
+    And sets the status code to 401.
+
+    :param e: The exception that was thrown Bravado Core upon request validation failure.
+    :type e: BaseException
+    :return: The response payload.
+    :rtype: dict
+    """
+    return _error_response(401, e)
+
+
 def default_not_found_handler(r):
     """
     The default error handler function for route not found failures.
@@ -91,6 +110,31 @@ def default_not_found_handler(r):
     :rtype: dict
     """
     return _error_response(404, r)
+
+
+class SecurityPatchedOperation(object):
+    def __init__(self, core_op):
+        self._core_op = core_op
+
+    def __repr__(self):
+        return repr(self._core_op)
+
+    @property
+    def security_specs(self):
+        return []
+
+    @property
+    def security_requirements(self):
+        return []
+
+    def __getattr__(self, item):
+        return getattr(self._core_op, item)
+
+    def __setattr__(self, key, value):
+        if key == "_core_op":
+            self.__dict__[key] = value
+        else:
+            return setattr(self._core_op, key, value)
 
 
 class SwaggerPlugin(object):
@@ -121,12 +165,17 @@ class SwaggerPlugin(object):
     * ``internally_dereference_refs`` -- (bool) Should Bravado fully derefence $refs (for a performance speed up)?
     * ``ignore_undefined_api_routes`` -- (bool) Should we ignore undefined API routes, and trigger the
         swagger_op_not_found handler?
+    * ``ignore_security_definitions`` -- (bool) Should we ignore the security requirements specified in the swagger
+        spec? This allows you to use things like Cookie auth as an undocumented fallback without Bravado complaining.
     * ``auto_jsonify`` -- (bool) Should we automatically convert data returned from our callbacks to JSON? Bottle
         normally will attempt to convert only objects, but we can do better.
     * ``invalid_request_handler`` -- (Exception -> HTTP Response) This handler is triggered when the
         request validation fails.
     * ``invalid_response_handler`` -- (Exception -> HTTP Response) This handler is triggered when
         the response validation fails.
+    * ``invalid_security_handler`` -- (Exception -> HTTP Response) This handler is triggered when
+        no valid forms of authentication matching the Swagger spec were in the incoming request. This is
+        ignored if ``ignore_security_definitions`` is set to True.
     * ``swagger_op_not_found_handler`` -- (bottle.Route -> HTTP Response) This handler is triggered if the
         route isn't found for the API subpath, and ignore_missing_routes has been set True.
     * ``exception_handler`` -- (Base Exception -> HTTP Response.) This handler is triggered if the
@@ -157,9 +206,11 @@ class SwaggerPlugin(object):
                  default_type_to_object=False,
                  internally_dereference_refs=False,
                  ignore_undefined_api_routes=False,
+                 ignore_security_definitions=False,
                  auto_jsonify=True,
                  invalid_request_handler=default_bad_request_handler,
                  invalid_response_handler=default_server_error_handler,
+                 invalid_security_handler=default_invalid_security_handler,
                  swagger_op_not_found_handler=default_not_found_handler,
                  exception_handler=default_server_error_handler,
                  swagger_base_path=None,
@@ -196,6 +247,9 @@ class SwaggerPlugin(object):
         :param ignore_undefined_api_routes: Should we ignore undefined API routes, and trigger the
             swagger_op_not_found handler?
         :type ignore_undefined_api_routes: bool
+        :param ignore_security_definitions: Should we ignore the set security definitions? This might make sense if
+                                            you also want to permit Cookie auth (which is not available in OpenAPI 2).
+        :type ignore_security_definitions: bool
         :param auto_jsonify: Should we automatically convert data returned from our callbacks to JSON? Bottle
             normally will attempt to convert only objects, but we can do better.
         :type auto_jsonify: bool
@@ -203,6 +257,9 @@ class SwaggerPlugin(object):
         :type invalid_request_handler: BaseException -> HTTP Response
         :param invalid_response_handler: This handler is triggered when the response validation fails.
         :type invalid_response_handler: BaseException -> HTTP Response
+        :param invalid_security_handler: This handler is triggered when no means of authentication
+                                         were found for the request.
+        :type invalid_security_handler: BaseException -> HTTP Response
         :param swagger_op_not_found_handler: This handler is triggered if the route isn't found for the API subpath,
            and ignore_missing_routes has been set True.
         :type swagger_op_not_found_handler: bottle.Route -> HTTP Response
@@ -238,9 +295,11 @@ class SwaggerPlugin(object):
             swagger_def.update(basePath=swagger_base_path)
 
         self.ignore_undefined_routes = ignore_undefined_api_routes
+        self.ignore_security_definitions = ignore_security_definitions
         self.auto_jsonify = auto_jsonify
         self.invalid_request_handler = invalid_request_handler
         self.invalid_response_handler = invalid_response_handler
+        self.invalid_security_handler = invalid_security_handler
         self.swagger_op_not_found_handler = swagger_op_not_found_handler
         self.exception_handler = exception_handler
         self.serve_swagger_ui = serve_swagger_ui
@@ -340,7 +399,11 @@ class SwaggerPlugin(object):
             request.swagger_op = swagger_op
 
             try:
-                request.swagger_data = self._validate_request(swagger_op)
+                request.swagger_data = self._validate_request(
+                    swagger_op, ignore_security_definitions=self.ignore_security_definitions
+                )
+            except SwaggerSecurityValidationError as e:
+                return self.invalid_security_handler(e)
             except ValidationError as e:
                 return self.invalid_request_handler(e)
 
@@ -368,7 +431,9 @@ class SwaggerPlugin(object):
         return result
 
     @staticmethod
-    def _validate_request(swagger_op):
+    def _validate_request(swagger_op, ignore_security_definitions=False):
+        if ignore_security_definitions:
+            swagger_op = SecurityPatchedOperation(swagger_op)
         return unmarshal_request(BottleIncomingRequest(request), swagger_op)
 
     @staticmethod
